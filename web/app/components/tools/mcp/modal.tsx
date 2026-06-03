@@ -24,6 +24,13 @@ import AuthenticationSection from './sections/authentication-section'
 import ConfigurationsSection from './sections/configurations-section'
 import HeadersSection from './sections/headers-section'
 
+// SSO protocols whose token-endpoint flow supports refresh-token issuance and
+// therefore can back MCP per-user identity forwarding. SAML cannot — it has
+// no refresh model and no token endpoint, so the enterprise side returns the
+// disabled stub for it.
+const MCP_FORWARDING_CAPABLE_PROTOCOLS = ['oidc', 'oauth2'] as const
+type MCPForwardingCapableProtocol = typeof MCP_FORWARDING_CAPABLE_PROTOCOLS[number]
+
 type MCPModalConfirmPayload = {
   name: string
   server_url: string
@@ -76,7 +83,14 @@ const MCPModalContent: FC<MCPModalContentProps> = ({
   } = useMCPModalForm(data)
 
   const { data: systemFeatures } = useSuspenseQuery(systemFeaturesQueryOptions())
-  const isForwardIdentitySupported = systemFeatures.sso_enforced_for_signin
+  // SAML has no refresh_token model, so the enterprise side can't mint
+  // per-call MCP tokens. Only OIDC and OAuth2 can — gate the toggle on
+  // both "SSO enforced" AND "protocol is refresh-capable".
+  const isForwardIdentitySupported
+    = systemFeatures.sso_enforced_for_signin
+    && MCP_FORWARDING_CAPABLE_PROTOCOLS.includes(
+      systemFeatures.sso_enforced_for_signin_protocol as MCPForwardingCapableProtocol,
+    )
 
   const isHovering = useHover(appIconRef)
 

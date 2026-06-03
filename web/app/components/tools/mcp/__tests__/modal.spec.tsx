@@ -30,10 +30,14 @@ vi.mock('@langgenius/dify-ui/toast', () => ({
   },
 }))
 
-// systemFeatures gate for the Forward-user-identity toggle. Default SSO off
-// (matches pre-Enterprise installations); tests that need the toggle enabled
-// flip `mockSystemFeatures.sso_enforced_for_signin = true`.
-const mockSystemFeatures = vi.hoisted(() => ({ sso_enforced_for_signin: false }))
+// Default: SSO off entirely. Tests that need the toggle visible flip
+// `sso_enforced_for_signin = true` AND set the protocol to 'oidc' or
+// 'oauth2'. Tests for the SAML gate set protocol = 'saml' to assert the
+// toggle stays hidden even when sso_enforced_for_signin is true.
+const mockSystemFeatures = vi.hoisted(() => ({
+  sso_enforced_for_signin: false,
+  sso_enforced_for_signin_protocol: '' as 'oidc' | 'oauth2' | 'saml' | '',
+}))
 vi.mock('@/features/system-features/client', () => ({
   systemFeaturesQueryOptions: () => ({
     queryKey: ['mock-system-features'],
@@ -738,7 +742,15 @@ describe('MCPModal', () => {
   describe('Forward-user-identity toggle', () => {
     beforeEach(() => {
       mockSystemFeatures.sso_enforced_for_signin = false
+      mockSystemFeatures.sso_enforced_for_signin_protocol = ''
     })
+
+    // Helper: turn SSO on with a refresh-capable protocol so the toggle is
+    // visible. Use this for any test that needs the field rendered.
+    const enableRefreshCapableSSO = () => {
+      mockSystemFeatures.sso_enforced_for_signin = true
+      mockSystemFeatures.sso_enforced_for_signin_protocol = 'oidc'
+    }
 
     const fillRequiredFields = () => {
       fireEvent.change(
@@ -762,14 +774,28 @@ describe('MCPModal', () => {
     })
 
     it('renders the toggle and helper tip when SSO is configured', () => {
-      mockSystemFeatures.sso_enforced_for_signin = true
+      enableRefreshCapableSSO()
       render(<MCPModal {...defaultProps} />, { wrapper: createWrapper() })
       expect(screen.getByText('tools.mcp.modal.forwardUserIdentity')).toBeInTheDocument()
       expect(screen.getByText('tools.mcp.modal.forwardUserIdentityTip')).toBeInTheDocument()
     })
 
-    it('submits identity_mode="off" by default (toggle off)', async () => {
+    it('does not render the toggle when SSO protocol is SAML (no refresh model)', () => {
       mockSystemFeatures.sso_enforced_for_signin = true
+      mockSystemFeatures.sso_enforced_for_signin_protocol = 'saml'
+      render(<MCPModal {...defaultProps} />, { wrapper: createWrapper() })
+      expect(screen.queryByText('tools.mcp.modal.forwardUserIdentity')).not.toBeInTheDocument()
+    })
+
+    it('renders the toggle when SSO protocol is OAuth2', () => {
+      mockSystemFeatures.sso_enforced_for_signin = true
+      mockSystemFeatures.sso_enforced_for_signin_protocol = 'oauth2'
+      render(<MCPModal {...defaultProps} />, { wrapper: createWrapper() })
+      expect(screen.getByText('tools.mcp.modal.forwardUserIdentity')).toBeInTheDocument()
+    })
+
+    it('submits identity_mode="off" by default (toggle off)', async () => {
+      enableRefreshCapableSSO()
       const onConfirm = vi.fn()
       render(
         <MCPModal {...defaultProps} onConfirm={onConfirm} />,
@@ -790,7 +816,7 @@ describe('MCPModal', () => {
     })
 
     it('submits identity_mode="idp_token" when toggle is flipped on', async () => {
-      mockSystemFeatures.sso_enforced_for_signin = true
+      enableRefreshCapableSSO()
       const onConfirm = vi.fn()
       render(
         <MCPModal {...defaultProps} onConfirm={onConfirm} />,
