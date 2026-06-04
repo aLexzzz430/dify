@@ -86,11 +86,8 @@ const MCPModalContent: FC<MCPModalContentProps> = ({
   // SAML has no refresh_token model, so the enterprise side can't mint
   // per-call MCP tokens. Only OIDC and OAuth2 can — gate the toggle on
   // both "SSO enforced" AND "protocol is refresh-capable".
-  const isForwardIdentitySupported
-    = systemFeatures.sso_enforced_for_signin
-    && MCP_FORWARDING_CAPABLE_PROTOCOLS.includes(
-      systemFeatures.sso_enforced_for_signin_protocol as MCPForwardingCapableProtocol,
-    )
+  const ssoProtocol = systemFeatures.sso_enforced_for_signin_protocol as MCPForwardingCapableProtocol
+  const isForwardIdentitySupported = systemFeatures.sso_enforced_for_signin && MCP_FORWARDING_CAPABLE_PROTOCOLS.includes(ssoProtocol)
 
   const isHovering = useHover(appIconRef)
 
